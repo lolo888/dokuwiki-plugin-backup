@@ -75,6 +75,30 @@ var $backup = '';
 			$this->state = 0;
 		}
 	}
+	
+  function runPharDataBackup($files, $finalfile, $tarfilename, $basedir, $compress_type)
+	{
+   //dbg("Running PharData compression");
+    $count = count($files);
+    $path_parts = pathinfo($finalfile);
+    $finaltarfilewpath = "".$path_parts['dirname']."/".basename($finalfile, ".".$compress_type);
+		//Create archive object, add files, compile and compress.
+    $result = false;
+    $tar = new PharData($finaltarfilewpath);
+    foreach($files as $file){
+      $tar->addFile($file);
+    }
+    if(strcmp($compress_type, 'bz2') == 0){
+      $tar->compress(PHAR::BZ2);
+    } else {
+      $tar->compress(PHAR::GZ);
+    }
+    unlink($finaltarfilewpath);
+    $result = true;
+		
+    return ($result) ? $tarfilename.'.'.$compress_type : '';	//return filename on success...
+	}
+
 
 	function runPearBackup($files, $finalfile, $tarfilename, $basedir, $compress_type)
 	{
@@ -85,6 +109,7 @@ var $backup = '';
 		
 		return ($result) ? $tarfilename.'.'.$compress_type : '';	//return filename on success...
 	}
+
 
 	function runExecBackup($files, $tarfilename, $basename, $basedir)
 	{
@@ -121,12 +146,17 @@ var $backup = '';
 		global $bt_loaded, $bt_settings;
 
 		$bt_pearWorks = (class_exists("Archive_Tar")) ? true : false;
+		$bt_phardataWorks = (class_exists("PharData")) ? true : false;
 		$bt_execWorks = bt_exec("tar --version");
+
+   //dbg("bt_pearWorks: $bt_pearWorks");
+   //dbg("bt_phardataWorks: $bt_phardataWorks");
+   //dbg("bt_execWorks: $bt_execWorks");
 
 		// Where to put these files?
 		$tarpath = $conf['mediadir'].'/'.strtr($this->getConf('backupnamespace'),':','/');
 		
-		if (!($bt_pearWorks || $bt_execWorks))	//if neither works, display the error message.
+		if (!($bt_pearWorks || $bt_execWorks || $bt_phardataWorks))	//if neither works, display the error message.
 		{
 			print $this->locale_xhtml('error');
 		}
@@ -156,8 +186,9 @@ var $backup = '';
 				ptln('	<input type="hidden" name="page" value="'.$this->getPluginName().'" />');
 				print '<center>';
 	
-//				ptln('bt_settings[type] = '.$bt_settings['type'].'<br/>');
+				//dbg('bt_settings[type] = '.$bt_settings['type']);
 				ptln('	Backup method: <select name="backup[type]">');
+				if ($bt_phardataWorks == true) ptln('		<option value="PHARDATA" '.(strcmp($bt_settings['type'], 'PHARDATA') == 0 ? 'selected' : '').'>PharData Archive Library</option>');
 				if ($bt_pearWorks == true) ptln('		<option value="PEAR" '.(strcmp($bt_settings['type'], 'PEAR') == 0 ? 'selected' : '').'>PEAR Archive Library</option>');
 				if ($bt_execWorks == true) ptln('		<option value="exec" '.(strcmp($bt_settings['type'], 'exec') == 0 ? 'selected' : '').'>GNU Tar (filtered)</option>');
 				if ($bt_execWorks == true) ptln('		<option value="lazy" '.(strcmp($bt_settings['type'], 'lazy') == 0 ? 'selected' : '').'>GNU Tar (fast;unfiltered)</option>');
@@ -181,8 +212,8 @@ var $backup = '';
 			elseif ($this->state == 1)
 			{
 				//Save settings...
-				$bt_settings['type']					= strcmp($this->backup['type'], 'PEAR') == 0 ? 'PEAR' :
-																				 strcmp($this->backup['type'], 'exec') == 0 ? 'exec' : 'lazy';
+       //dbg("backup[type] = ".$this->backup['type']);
+				$bt_settings['type']					= strcmp($this->backup['type'], 'PHARDATA') == 0 ? 'PHARDATA' : strcmp($this->backup['type'], 'PEAR') == 0 ? 'PEAR' : strcmp($this->backup['type'], 'exec') == 0 ? 'exec' : 'lazy';
 				$bt_settings['pages']					= strcmp($this->backup['pages'], 'on') == 0 ? 'checked' : '';
 				$bt_settings['revisions']			= strcmp($this->backup['revisions'], 'on') == 0 ? 'checked' : '';
 				$bt_settings['subscriptions']	= strcmp($this->backup['subscriptions'], 'on') == 0 ? 'checked' : '';
@@ -259,7 +290,9 @@ var $backup = '';
 				
 				//Run the backup method
 				$this->_mkpath($tarpath,$conf['dmode']);
-				if (strcmp($this->backup['type'], 'PEAR') == 0)
+				if (strcmp($this->backup['type'], 'PHARDATA') == 0){
+					$finalfile = $this->runPharDataBackup($files, $tarpath.'/'.$finalfile, $tarfilename, $basedir, $compress_type);
+        } else if (strcmp($this->backup['type'], 'PEAR') == 0)
 					$finalfile = $this->runPearBackup($files, $tarpath.'/'.$finalfile, $tarfilename, $basedir, $compress_type);
 				else	//exec and lazy both use the exec method
 				{
