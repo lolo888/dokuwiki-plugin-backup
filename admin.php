@@ -86,7 +86,7 @@ var $backup = '';
     $result = false;
     $tar = new PharData($finaltarfilewpath);
     foreach($files as $file){
-      $tar->addFile($file);
+	$tar->addFile($file, substr($file, strlen($basedir)));
     }
     if(strcmp($compress_type, 'bz2') == 0){
       $tar->compress(PHAR::BZ2);
